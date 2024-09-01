@@ -1,0 +1,32 @@
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "mongodb"
+    url      = env("DATABASE_URL")
+}
+
+model Alumini {
+    id               String @id @default(auto()) @map("_id") @db.ObjectId
+    collegeId        String @unique
+    name             String
+    email            String @unique
+    password         String
+    dept             String
+    institution      String
+    yearOfGraduation String
+    areaOfIntrest    String
+}
+
+model Student {
+    id               String  @id @default(auto()) @map("_id") @db.ObjectId
+    collegeId        String  @unique
+    name             String?
+    email            String  @unique
+    password         String
+    dept             String
+    institution      String
+    yearOfGraduation String
+    areaOfIntrest    String
+}
