@@ -83,10 +83,7 @@ export const aluminiRegister = async (req, res) => {
       return res.status(401).json({ message: "Id Found" });
     }
 
-    console.log(userId);
     const hashedPassword = await bycrypt.hash(pass, 10);
-
-    console.log(hashedPassword);
 
     const newUser = await prisma.alumini.create({
       data: {
