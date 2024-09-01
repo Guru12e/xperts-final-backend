@@ -1,127 +1,281 @@
-import React, { useState } from "react";
-import { motion } from "framer-motion";
-import axios from "axios";
-import { useNavigate } from "react-router-dom";
-import "../styles/colors.scss";
-import "../styles/index.css";
+import bycrypt from "bcrypt";
+import prisma from "../lib/prisma.js";
+import nodemailer from "nodemailer";
 
-const LoginPage = () => {
-  const [role, setRole] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const navigate = useNavigate();
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  host: "smtp.gmail.com",
+  port: 587,
+  secure: false,
+  auth: {
+    user: process.env.USER,
+    pass: process.env.PASS,
+  },
+});
 
-  const handleRoleChange = (event) => {
-    setRole(event.target.value);
-  };
+export const studentRegister = async (req, res) => {
+  const {
+    collegeId,
+    email,
+    pass,
+    dept,
+    name,
+    institution,
+    yog,
+    areaOfIntrest,
+  } = req.body;
 
-  const handleEmailChange = (event) => {
-    setEmail(event.target.value);
-  };
+  console.log(email);
 
-  const handlePasswordChange = (event) => {
-    setPassword(event.target.value);
-  };
+  try {
+    const userId = await prisma.student.findUnique({ where: { collegeId } });
 
-  const handleSubmit = async (event) => {
-    event.preventDefault();
-
-    if (!role) {
-      alert("Please select a role.");
-      return;
+    if (userId) {
+      return res.status(402).json({ message: "Id Found" });
     }
 
-    try {
-      const apiUrl =
-        role === "ALUMNI"
-          ? "http://localhost:5000/auth/aluminiLogin"
-          : "http://localhost:5000/auth/studentLogin";
+    const hashedPassword = await bycrypt.hash(pass, 10);
 
-      const response = await axios.post(apiUrl, {
-        email: email,
-        pass: password,
-      });
+    const newUser = await prisma.student.create({
+      data: {
+        password: hashedPassword,
+        email,
+        collegeId,
+        dept,
+        name,
+        yearOfGraduation: yog,
+        institution,
+        areaOfIntrest,
+      },
+    });
 
-      if (response.status === 200) {
-        localStorage.setItem("user", JSON.stringify(response.data));
-        navigate("/");
-      }
-    } catch (error) {
-      if (error.response && error.response.status === 403) {
-        setError("Invalid CredientialsInvalid Credentials");
-      } else {
-        setError("Login failed.");
-      }
-    }
-  };
+    const { password: userPass, ...userinfo } = newUser;
 
-  return (
-    <div className='flex items-center justify-center min-h-screen bg-[var(--sky-blue)] p-4'>
-      <motion.div
-        className='w-full max-w-md bg-white p-8 rounded-lg shadow-lg'
-        initial={{ opacity: 0, scale: 0.8 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.5 }}
-      >
-        <h2 className='text-2xl font-bold text-[var(--deep-blue)] mb-6 text-center'>
-          Login
-        </h2>
-        {error.length != 0 && (
-          <div className='py-2 px-4 border rounded-md border-red-400 bg-rose-200 font-semibold uppercase text-center text-md my-4'>
-            {error}
-          </div>
-        )}
-        <form onSubmit={handleSubmit}>
-          <div className='mb-4'>
-            <label className='block text-gray-700 mb-2'>Select Role</label>
-            <select
-              value={role}
-              onChange={handleRoleChange}
-              className='w-full p-2 border rounded'
-              required
-            >
-              <option value='' disabled>
-                Select your role
-              </option>
-              <option value='STUDENT'>STUDENT</option>
-              <option value='ALUMNI'>ALUMNI</option>
-            </select>
-          </div>
-
-          <div className='mb-4'>
-            <label className='block text-gray-700 mb-2'>
-              Registered Email ID
-            </label>
-            <input
-              type='email'
-              value={email}
-              onChange={handleEmailChange}
-              className='w-full p-2 border rounded'
-              required
-            />
-          </div>
-
-          <div className='mb-6'>
-            <label className='block text-gray-700 mb-2'>Password</label>
-            <input
-              type='password'
-              value={password}
-              onChange={handlePasswordChange}
-              className='w-full p-2 border rounded'
-              required
-            />
-          </div>
-
-          <div className='flex justify-center'>
-            <button type='submit' className='primary-btn'>
-              Login
-            </button>
-          </div>
-        </form>
-      </motion.div>
-    </div>
-  );
+    res.status(200).json(userinfo);
+  } catch (err) {
+    console.log(err);
+    res.json(err);
+  }
 };
 
-export default LoginPage;
+export const aluminiRegister = async (req, res) => {
+  const {
+    collegeId,
+    email,
+    pass,
+    dept,
+    name,
+    institution,
+    yog,
+    areaOfIntrest,
+  } = req.body;
+
+  try {
+    const user = await prisma.alumini.findUnique({ where: { email } });
+
+    if (user) {
+      return res.status(402).json({ message: "Email Id Found" });
+    }
+
+    const userId = await prisma.alumini.findUnique({ where: { collegeId } });
+
+    if (userId) {
+      return res.status(401).json({ message: "Id Found" });
+    }
+
+    console.log(userId);
+    const hashedPassword = await bycrypt.hash(pass, 10);
+
+    console.log(hashedPassword);
+
+    const newUser = await prisma.alumini.create({
+      data: {
+        password: hashedPassword,
+        email,
+        collegeId,
+        dept,
+        name,
+        yearOfGraduation: yog,
+        institution,
+        areaOfIntrest,
+      },
+    });
+
+    const { password: userPass, ...userinfo } = newUser;
+
+    res.status(200).json(userinfo);
+  } catch (err) {
+    res.json(err);
+  }
+};
+
+export const otpVerify = async (req, res) => {
+  const { email, collegeId } = req.body;
+
+  const OTP = Math.floor(1000 + Math.random() * 9000);
+
+  try {
+    const alumini = await prisma.alumini.findUnique({ where: { email } });
+
+    const student = await prisma.student.findUnique({ where: { email } });
+
+    const aluminiId = await prisma.alumini.findUnique({
+      where: { collegeId: collegeId },
+    });
+
+    const studentId = await prisma.student.findUnique({
+      where: { collegeId: collegeId },
+    });
+
+    if (alumini || student) {
+      return res.status(201).json({ message: "user already" });
+    }
+
+    if (aluminiId || studentId) {
+      return res.status(202).json({ message: "id found" });
+    }
+
+    const info = await transporter.sendMail({
+      from: {
+        name: "admin@Xperts",
+        address: process.env.USER,
+      },
+      to: email,
+      subject: "Otp Email Verification",
+      text: `Your Otp for the verification:${OTP}`,
+
+      html: `<div
+        style='
+        display:grid;
+        place-items:center;
+        background-color: #FFF;
+        height:100px;
+        font-size: xx-large;
+        font-weight: bold;
+      '
+      >
+        <p style="text-align:center">Otp:${OTP}</p>
+      </div>`,
+    });
+  } catch (e) {
+    console.log(e);
+    return res.status(404).json({ message: "Email id not Found" });
+  }
+
+  return res.status(200).json({ message: OTP });
+};
+
+export const studentLogin = async (req, res) => {
+  const { email, pass } = req.body;
+
+  console.log(email);
+  try {
+    const user = await prisma.student.findUnique({
+      where: {
+        email,
+      },
+    });
+
+    if (!user) {
+      return res.status(403).json({ message: "Enter a Valid Credientails" });
+    }
+
+    const checkPass = bycrypt.compareSync(pass, user.password);
+
+    if (!checkPass) {
+      return res.status(403).json({ message: "Enter a Valid Credientails" });
+    }
+
+    const { password, ...userInfo } = user;
+
+    return res.status(200).json(userInfo);
+  } catch (e) {
+    return res.status(500).json({ message: "Login Failed" });
+  }
+};
+
+export const aluminiLogin = async (req, res) => {
+  const { email, pass } = req.body;
+
+  try {
+    const user = await prisma.alumini.findUnique({
+      where: {
+        email,
+      },
+    });
+
+    if (!user) {
+      return res.status(403).json({ message: "Enter a Valid Credientails" });
+    }
+
+    const checkPass = bycrypt.compareSync(pass, user.password);
+
+    if (!checkPass) {
+      return res.status(403).json({ message: "Enter a Valid Credientails" });
+    }
+
+    const { password, ...userInfo } = user;
+
+    return res.status(200).json(userInfo);
+  } catch (e) {
+    console.log(e);
+    return res.status(500).json({ message: "Login Failed" });
+  }
+};
+
+export const getUser = async (req, res) => {
+  const { id } = req.body;
+
+  try {
+    const response = await prisma.user.findUnique({ where: { id } });
+    const { password, ...userInfo } = response;
+
+    return res.status(200).json(userInfo);
+  } catch (err) {
+    res.status(500).json({ message: "not a user" });
+  }
+};
+
+export const sendFeedBack = async (req, res) => {
+  const { name, email, feedback } = req.body;
+
+  const info = await transporter.sendMail({
+    from: {
+      name: "Aura Support",
+      address: process.env.USER,
+    },
+    to: "palanitce@gmail.com",
+    subject: `Feedback from ${name} (${email})`,
+    text: `Feedback from Name: ${name} Email: ${email}\n\nFeedback: ${feedback}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; color: #333; padding: 20px; border: 1px solid #ddd; border-radius: 8px; background-color: #f9f9f9;">
+        <h1 style="color: #333; font-size: 24px; margin-bottom: 10px;">Feedback from ${name}</h1>
+        <p style="font-size: 16px; margin-bottom: 20px;"><strong>Email:</strong> ${email}</p>
+        <p style="font-size: 16px; line-height: 1.5;">${feedback}</p>
+      </div>`,
+  });
+
+  return res.status(200).json({ message: "success" });
+};
+
+export const recommend = async (req, res) => {
+  const { dept, institution, areaOfIntrest } = req.body;
+
+  try {
+    const users = await prisma.alumini.findMany({
+      where: {
+        dept,
+        institution,
+        areaOfIntrest,
+      },
+    });
+
+    if (users.length > 0) {
+      return res.status(200).json({ users });
+    } else {
+      return res.status(404).json({ message: "No users found." });
+    }
+  } catch (e) {
+    res.status(200).json({ message: e });
+  }
+};
